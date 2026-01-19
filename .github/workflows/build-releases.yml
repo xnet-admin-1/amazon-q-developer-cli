@@ -192,9 +192,9 @@ jobs:
       
       - name: Build deb package
         run: |
-          mkdir -p target/release
-          cp binary/q-cli-linux-x86_64 target/release/chat_cli
-          chmod +x target/release/chat_cli
+          mkdir -p target/x86_64-unknown-linux-gnu/release
+          cp binary/q-cli-linux-x86_64 target/x86_64-unknown-linux-gnu/release/chat_cli
+          chmod +x target/x86_64-unknown-linux-gnu/release/chat_cli
           cargo deb --no-build --target x86_64-unknown-linux-gnu
       
       - name: Find and rename deb
