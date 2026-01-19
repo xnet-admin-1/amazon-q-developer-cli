@@ -1,0 +1,252 @@
+name: Build Multi-Platform Releases
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+      
+      - name: Install nightly for formatting
+        run: rustup toolchain install nightly
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build release
+        run: cargo build --release --bin chat_cli
+      
+      - name: Create artifact directory
+        run: mkdir -p artifacts
+        shell: bash
+      
+      - name: Copy binary
+        run: cp target/release/chat_cli.exe artifacts/q-cli-windows-x86_64.exe
+        shell: bash
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: q-cli-windows-x86_64
+          path: artifacts/q-cli-windows-x86_64.exe
+
+  build-linux-x86_64:
+    name: Build Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu
+      
+      - name: Install nightly
+        run: rustup toolchain install nightly
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build release
+        run: cargo build --release --bin chat_cli
+      
+      - name: Create artifact directory
+        run: mkdir -p artifacts
+      
+      - name: Copy binary
+        run: cp target/release/chat_cli artifacts/q-cli-linux-x86_64
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: q-cli-linux-x86_64
+          path: artifacts/q-cli-linux-x86_64
+
+  build-linux-arm64:
+    name: Build Linux ARM64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-unknown-linux-gnu
+      
+      - name: Install nightly
+        run: rustup toolchain install nightly
+      
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-arm64-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build release
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
+        run: cargo build --release --target aarch64-unknown-linux-gnu --bin chat_cli
+      
+      - name: Create artifact directory
+        run: mkdir -p artifacts
+      
+      - name: Copy binary
+        run: cp target/aarch64-unknown-linux-gnu/release/chat_cli artifacts/q-cli-linux-arm64
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: q-cli-linux-arm64
+          path: artifacts/q-cli-linux-arm64
+
+  build-deb-x86_64:
+    name: Build Debian Package x86_64
+    runs-on: ubuntu-latest
+    needs: build-linux-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download Linux x86_64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: q-cli-linux-x86_64
+          path: ./binary
+      
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Build deb package
+        run: |
+          mkdir -p target/release
+          cp binary/q-cli-linux-x86_64 target/release/chat_cli
+          chmod +x target/release/chat_cli
+          cargo deb --no-build --target x86_64-unknown-linux-gnu
+      
+      - name: Find and rename deb
+        run: |
+          mkdir -p artifacts
+          find target -name "*.deb" -exec cp {} artifacts/q-cli-x86_64.deb \;
+      
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: q-cli-deb-x86_64
+          path: artifacts/q-cli-x86_64.deb
+
+  build-deb-arm64:
+    name: Build Debian Package ARM64
+    runs-on: ubuntu-latest
+    needs: build-linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download Linux ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: q-cli-linux-arm64
+          path: ./binary
+      
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      
+      - name: Build deb package
+        run: |
+          mkdir -p target/aarch64-unknown-linux-gnu/release
+          cp binary/q-cli-linux-arm64 target/aarch64-unknown-linux-gnu/release/chat_cli
+          chmod +x target/aarch64-unknown-linux-gnu/release/chat_cli
+          cargo deb --no-build --target aarch64-unknown-linux-gnu
+      
+      - name: Find and rename deb
+        run: |
+          mkdir -p artifacts
+          find target -name "*.deb" -exec cp {} artifacts/q-cli-arm64.deb \;
+      
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: q-cli-deb-arm64
+          path: artifacts/q-cli-arm64.deb
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux-x86_64, build-linux-arm64, build-deb-x86_64, build-deb-arm64]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/q-cli-windows-x86_64/q-cli-windows-x86_64.exe
+            artifacts/q-cli-linux-x86_64/q-cli-linux-x86_64
+            artifacts/q-cli-linux-arm64/q-cli-linux-arm64
+            artifacts/q-cli-deb-x86_64/q-cli-x86_64.deb
+            artifacts/q-cli-deb-arm64/q-cli-arm64.deb
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
