@@ -1,4 +1,4 @@
-use std::os::unix::fs::MetadataExt as _;
+
 use std::path::{
     Path,
     PathBuf,
@@ -115,11 +115,11 @@ impl ImageRead {
                 errors.push(format!("'{}' is not a file", path.to_string_lossy()));
                 continue;
             }
-            if md.size() > MAX_IMAGE_SIZE_BYTES {
+            if md.len() > MAX_IMAGE_SIZE_BYTES {
                 errors.push(format!(
                     "'{}' has size {} which is greater than the max supported size of {}",
                     path.to_string_lossy(),
-                    md.size(),
+                    md.len(),
                     MAX_IMAGE_SIZE_BYTES
                 ));
             }
@@ -179,7 +179,7 @@ pub async fn read_image(path: impl AsRef<Path>) -> Result<ImageBlock, String> {
     let image_size = tokio::fs::symlink_metadata(path)
         .await
         .map_err(|e| format!("failed to read file metadata for {}: {}", path.to_string_lossy(), e))?
-        .size();
+        .len();
     if image_size > MAX_IMAGE_SIZE_BYTES {
         return Err(format!(
             "image at {} has size {} bytes, but the max supported size is {}",

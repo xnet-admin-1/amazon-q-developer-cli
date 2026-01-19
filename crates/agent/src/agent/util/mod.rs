@@ -9,7 +9,7 @@ pub mod test;
 
 use std::collections::HashMap;
 use std::env::VarError;
-use std::os::unix::fs::MetadataExt as _;
+
 use std::path::Path;
 
 use bstr::ByteSlice as _;
@@ -116,12 +116,12 @@ pub async fn read_file_with_max_limit(
         .with_context(|| format!("Failed to read from file at '{}'", path.to_string_lossy()))?;
     let mut content = content.to_str_lossy().to_string();
 
-    let truncated_amount = if md.size() > max_file_length {
+    let truncated_amount = if md.len() > max_file_length {
         // Edge case check to ensure the suffix is less than max file length.
         if suffix.len() as u64 > max_file_length {
-            return Ok((String::new(), md.size()));
+            return Ok((String::new(), md.len()));
         }
-        md.size() - max_file_length + suffix.len() as u64
+        md.len() - max_file_length + suffix.len() as u64
     } else {
         0
     };

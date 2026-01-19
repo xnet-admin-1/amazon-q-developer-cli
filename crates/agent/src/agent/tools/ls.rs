@@ -306,6 +306,24 @@ impl Entry {
             self.path.to_string_lossy()
         )
     }
+
+    #[cfg(windows)]
+    fn to_long_format(&self) -> String {
+        let datetime = time::OffsetDateTime::from_unix_timestamp(self.last_modified as i64).unwrap();
+        let formatted_date = datetime
+            .format(time::macros::format_description!(
+                "[month repr:short] [day] [hour]:[minute]"
+            ))
+            .unwrap();
+
+        format!(
+            "{} {} {} {}",
+            format_ftype(&self.metadata),
+            self.metadata.len(),
+            formatted_date,
+            self.path.to_string_lossy()
+        )
+    }
 }
 
 fn format_ftype(md: &Metadata) -> char {

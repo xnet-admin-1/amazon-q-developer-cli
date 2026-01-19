@@ -1,4 +1,9 @@
+#[cfg(unix)]
 pub mod execute_cmd;
+#[cfg(windows)]
+#[path = "execute_cmd_windows.rs"]
+pub mod execute_cmd;
+
 pub mod fs_read;
 pub mod fs_write;
 pub mod grep;
