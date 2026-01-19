@@ -209,7 +209,7 @@ jobs:
           python-version: '3.11'
       
       - name: Build release
-        run: python scripts/main.py build --release
+        run: python scripts/main.py build
       
       - name: Verify build artifacts
         run: |

@@ -1,0 +1,93 @@
+name: Build Windows Release
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'scripts/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build-windows-x64:
+    name: Build Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+      
+      - name: Install nightly
+        run: rustup toolchain install nightly
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Build release
+        run: python scripts/main.py build
+      
+      - name: Verify build artifacts
+        run: |
+          if (Test-Path "build\qchat-windows-x64.zip") {
+            Write-Host "✓ Build artifacts created successfully"
+            Write-Host ""
+            Write-Host "Artifacts:"
+            Get-ChildItem build\qchat-windows-x64.* | ForEach-Object {
+              Write-Host "  - $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)"
+            }
+          } else {
+            Write-Error "✗ Build artifacts not found"
+            exit 1
+          }
+        shell: pwsh
+      
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: qchat-windows-x64
+          path: |
+            build/qchat-windows-x64.zip
+            build/qchat-windows-x64.zip.sha256
+      
+      - name: Upload build summary
+        run: |
+          Write-Host "## Windows Build Summary" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "✓ Successfully built Windows x64 release" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "### Artifacts" >> $env:GITHUB_STEP_SUMMARY
+          Get-ChildItem build\qchat-windows-x64.* | ForEach-Object {
+            $size = [math]::Round($_.Length / 1MB, 2)
+            Write-Host "- ``$($_.Name)`` ($size MB)" >> $env:GITHUB_STEP_SUMMARY
+          }
+        shell: pwsh
