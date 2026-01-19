@@ -12,6 +12,10 @@
   - [Ubuntu/Debian](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-installing.html#command-line-installing-ubuntu)
   - [AppImage](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-installing.html#command-line-installing-appimage)
   - [Alternative Linux builds](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-installing.html#command-line-installing-alternative-linux)
+- **Windows**:
+  - Download the latest Windows build from [Releases](https://github.com/aws/amazon-q-developer-cli/releases)
+  - Extract `qchat-windows-x64.zip`
+  - Run `qchat.exe` from the extracted folder
 
 ## Contributing
 
@@ -21,9 +25,13 @@ Before getting started, see our [contributing docs](CONTRIBUTING.md#security-iss
 
 ### Prerequisites
 
-- MacOS
+- **macOS**
   - Xcode 13 or later
   - Brew
+- **Windows**
+  - Visual Studio 2019 or later (with C++ build tools) OR Visual Studio Build Tools 2019+
+  - Python 3.8 or later
+  - Rust toolchain with MSVC target (see step 2 below)
 
 #### 1. Clone repo
 
@@ -33,10 +41,24 @@ git clone https://github.com/aws/amazon-q-developer-cli.git
 
 #### 2. Install the Rust toolchain using [Rustup](https://rustup.rs):
 
+**macOS/Linux:**
 ```shell
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup default stable
 rustup toolchain install nightly
+cargo install typos-cli
+```
+
+**Windows:**
+```powershell
+# Download and run rustup-init.exe from https://rustup.rs
+# Or use winget:
+winget install Rustlang.Rustup
+
+# After installation, add the MSVC target:
+rustup default stable
+rustup toolchain install nightly
+rustup target add x86_64-pc-windows-msvc
 cargo install typos-cli
 ```
 
@@ -48,6 +70,45 @@ cargo install typos-cli
 - To format rust files: `cargo +nightly fmt`.
 - To run subcommands: `cargo run --bin chat_cli -- {subcommand}`.
   - Login would then be: `cargo run --bin chat_cli -- login`
+
+#### 4. Build release binaries
+
+**macOS/Linux:**
+```shell
+python scripts/main.py build --release
+```
+
+**Windows:**
+```powershell
+python scripts/main.py build --release
+```
+
+The build output will be in the `build/` directory:
+- **macOS**: `build/qchat.zip`
+- **Linux**: `build/qchat.tar.gz` and `build/qchat.zip`
+- **Windows**: `build/qchat-windows-x64.zip`
+
+### Troubleshooting
+
+#### Windows Build Issues
+
+**Missing MSVC compiler:**
+```
+error: linker `link.exe` not found
+```
+Solution: Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) with C++ build tools.
+
+**Python not found:**
+```
+'python' is not recognized as an internal or external command
+```
+Solution: Install Python from [python.org](https://www.python.org/downloads/) or Microsoft Store, and ensure it's in your PATH.
+
+**Rust target not installed:**
+```
+error: can't find crate for `std`
+```
+Solution: Run `rustup target add x86_64-pc-windows-msvc`
 
 ## Project Layout
 

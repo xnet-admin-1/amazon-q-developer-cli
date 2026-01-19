@@ -8,7 +8,7 @@ import shutil
 import time
 from typing import Any, Mapping, Sequence, List, Optional
 from const import APPLE_TEAM_ID, CHAT_BINARY_NAME, CHAT_PACKAGE_NAME
-from util import debug, info, isDarwin, isLinux, run_cmd, run_cmd_output, warn
+from util import debug, info, isDarwin, isLinux, isWindows, run_cmd, run_cmd_output, warn
 from rust import cargo_cmd_name, rust_env, rust_targets
 from importlib import import_module
 
@@ -102,6 +102,15 @@ def build_chat_bin(
         for target in targets:
             args.append(pathlib.Path("target") / target / target_subdir / package)
         run_cmd(args)
+        return out_path
+    elif isWindows():
+        # Windows builds with .exe extension
+        target = targets[0]
+        exe_name = f"{package}.exe"
+        target_path = pathlib.Path("target") / target / target_subdir / exe_name
+        out_path = BUILD_DIR / "bin" / f"{(output_name or package)}-{target}.exe"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target_path, out_path)
         return out_path
     else:
         # linux does not cross compile arch
@@ -494,6 +503,8 @@ def generate_sha(path: pathlib.Path) -> pathlib.Path:
         shasum_output = run_cmd_output(["shasum", "-a", "256", path])
     elif isLinux():
         shasum_output = run_cmd_output(["sha256sum", path])
+    elif isWindows():
+        return generate_sha_windows(path)
     else:
         raise Exception("Unsupported platform")
 
@@ -502,6 +513,22 @@ def generate_sha(path: pathlib.Path) -> pathlib.Path:
     path.write_text(sha)
     info(f"Wrote sha256sum to {path}:", sha)
     return path
+
+
+def generate_sha_windows(path: pathlib.Path) -> pathlib.Path:
+    """Generate SHA256 checksum for Windows builds using Python's hashlib"""
+    import hashlib
+    
+    sha256_hash = hashlib.sha256()
+    with open(path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    
+    sha = sha256_hash.hexdigest()
+    sha_path = path.with_name(f"{path.name}.sha256")
+    sha_path.write_text(f"{sha}  {path.name}\n")
+    info(f"Wrote sha256sum to {sha_path}: {sha}")
+    return sha_path
 
 
 def build_linux(chat_path: pathlib.Path, signer: GpgSigner | None):
@@ -531,6 +558,40 @@ def build_linux(chat_path: pathlib.Path, signer: GpgSigner | None):
     # clean up
     if signer:
         signer.clean()
+
+
+def build_windows(chat_path: pathlib.Path):
+    """
+    Creates qchat-windows-x64.zip under the build directory for Windows.
+    
+    Args:
+        chat_path: Path to the compiled executable
+    """
+    import zipfile
+    
+    # Copy executable to build directory
+    chat_dst = BUILD_DIR / f"{CHAT_BINARY_NAME}.exe"
+    chat_dst.unlink(missing_ok=True)
+    shutil.copy2(chat_path, chat_dst)
+    
+    # Create ZIP archive
+    zip_path = BUILD_DIR / f"{CHAT_BINARY_NAME}-windows-x64.zip"
+    zip_path.unlink(missing_ok=True)
+    
+    info(f"Creating zip output to {zip_path}")
+    
+    # Use Python's zipfile module (cross-platform)
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zipf.write(chat_dst, f"{CHAT_BINARY_NAME}.exe")
+        # Add license files if they exist
+        if pathlib.Path("LICENSE.MIT").exists():
+            zipf.write("LICENSE.MIT", "LICENSE.MIT")
+        if pathlib.Path("LICENSE.APACHE").exists():
+            zipf.write("LICENSE.APACHE", "LICENSE.APACHE")
+        if pathlib.Path("README.md").exists():
+            zipf.write("README.md", "README.md")
+    
+    generate_sha(zip_path)
 
 
 def build(
@@ -593,5 +654,7 @@ def build(
 
     if isDarwin():
         build_macos(chat_path, signing_data)
+    elif isWindows():
+        build_windows(chat_path)
     else:
         build_linux(chat_path, gpg_signer)
